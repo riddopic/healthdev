@@ -1,0 +1,13 @@
+---
+ suites:
+   - name: default
+     run_list:
+       - recipe[healthdev_test]
+       - recipe[healthdev]
+     attributes:
+       healthdev_test:
+         proxy:
+           automatic_proxy_script_url: https://mycompany.example.com/proxy.js
+       healthdev:
+         package:
+           atom: false

@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+set -o nounset -o pipefail
+
+CHEFDK_VERSION=0.10.0
+
+function prompt_continue () {
+  echo ""
+  echo "HealthDev bootstrapper encountered an error in the previous step."
+  read -p "Ignore the error and contine with installation? [yN] " </dev/tty
+  case "$REPLY" in
+    [yY]*) return
+      ;;
+    *) echo "Not cleaning up $tmpdir; exiting."
+      exit 2
+      ;;
+  esac
+}
+
+bootstrap_template=${1:-healthdev}
+private_source=${2:+source '$2'}
+
+tmpdir="/tmp/healthdev_$$"
+[[ ! -d "$tmpdir" ]] && mkdir "$tmpdir"
+
+clear
+
+cat <<EOF;
+
+The HealthDev Developer Bootstraper will:
+
+1. Install the latest ChefDK package.
+2. Download the 'healthdev' cookbook via Berkshelf
+3. Run 'chef-client' to install the rest of the tools you will need
+
+EOF
+
+cat > "${tmpdir}/Berksfile" <<EOF;
+source 'https://supermarket.chef.io'
+$private_source
+
+cookbook '$bootstrap_template'
+EOF
+
+cat > "${tmpdir}/client.rb" <<EOF;
+cookbook_path File.join(Dir.pwd, 'berks-cookbooks')
+Ohai::Config[:disabled_plugins] = [:Passwd]
+EOF
+
+cat <<EOF;
+
+** Installing ChefDK
+
+EOF
+
+chefdk_installed_version=$(chef --version 2>/dev/null | awk '/Chef Development Kit Version:/ {print $NF}')
+case "$chefdk_installed_version" in
+  "$CHEFDK_VERSION")
+    echo "ChefDK ${CHEFDK_VERSION} is already installed, skipping"
+    INSTALL_CHEFDK=0;;
+  "")
+    INSTALL_CHEFDK=1;;
+  *)
+    echo "Replacing ChefDK ${chefdk_installed_version} with ${CHEFDK_VERSION}"
+    echo "Uninstalling ChefDK ${chefdk_installed_version}..."
+    sudo rm -rf /opt/chefdk
+    sudo find /usr/bin /usr/local/bin -lname '/opt/chefdk/*' -delete
+    rm -rf ~/.chefdk
+    INSTALL_CHEFDK=1;;
+esac
+
+if [[ "$INSTALL_CHEFDK" -eq 1 ]]; then
+  echo "Installing ChefDK ${CHEFDK_VERSION}"
+  curl https://omnitruck.chef.io/install.sh | \
+    sudo -E bash -s -- -c stable -P chefdk -v ${CHEFDK_VERSION} || \
+      prompt_continue
+fi
+
+echo "Downloading cookbook dependencies with Berkshelf"
+cd "$tmpdir"
+chef exec berks vendor || prompt_continue
+
+echo "Running chef-client (installed by ChefDK) to bootstrap this machine"
+sudo -E chef-client -z -l error -c "${tmpdir}/client.rb" \
+     -o "$bootstrap_template" || prompt_continue
+
+cd -
+rm -f "$tmpdir/Berksfile"
+rm -f "$tmpdir/Berksfile.lock"
+rm -f "$tmpdir/client.rb"
+rm -rf "$tmpdir/berks-cookbooks"
+rmdir "$tmpdir"
