@@ -9,7 +9,7 @@ Bootstrap your Mac OS X workstation into a developer Nerdvana Chef cookbook deve
 
 ## [Quickstart](id:quickstart)
 
-Copy the command below and paste it into a terminal. This will download and run the [bootstrap](http://stash.kp.org/dop/healthdev.git/master/bootstrap) script on your workstation.
+Copy the command below and paste it into a terminal. This will download and run the [bootstrap](https://raw.githubusercontent.com/riddopic/healthdev/master/bootstrap) script on your workstation.
 
 ```shell
 curl https://raw.githubusercontent.com/riddopic/healthdev/master/bootstrap | bash
